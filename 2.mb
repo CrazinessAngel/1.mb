@@ -1,0 +1,61 @@
+import urllib.request
+import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+
+INPUT_FILE = r"C:\Users\230030047\Desktop\link.txt"
+OUTPUT_FILE = r"C:\Users\230030047\Desktop\report.txt"
+TIMEOUT = 10
+MAX_WORKERS = 10
+
+
+def check_url(url: str) -> tuple[str, str]:
+    url = url.strip()
+    if not url:
+        return url, "Error"
+
+    if not url.startswith(("http://", "https://")):
+        url = "http://" + url
+
+    try:
+        req = urllib.request.Request(url, method="GET",
+                                     headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            status = "Ok" if resp.status < 400 else "Error"
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+        status = "Error"
+
+    return url, status
+
+
+def main():
+    input_path = Path(INPUT_FILE)
+    if not input_path.exists():
+        print(f"Файл {INPUT_FILE} не найден.")
+        return
+
+    with input_path.open(encoding="utf-8") as f:
+        urls = [line.strip() for line in f if line.strip()]
+
+    if not urls:
+        print("Файл не содержит ссылок.")
+        return
+
+    results = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = {executor.submit(check_url, url): url for url in urls}
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    order = {url: i for i, url in enumerate(urls)}
+    results.sort(key=lambda x: order.get(x[0], len(urls)))
+
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        for url, status in results:
+            f.write(f"{url} -> {status}\n")
+
+    print(f"Готово. Результат сохранён в {OUTPUT_FILE}")
+
+
+if __name__ == "__main__":
+    main()
